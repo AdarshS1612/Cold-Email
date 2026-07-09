@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  COLD EMAIL
+  ─────────────────────────────────────────────────────
+  Fully client-side. No backend. Hosted on Firebase.
+  1. Find "PASTE YOUR FIREBASE CONFIG HERE" and fill it.
+  2. Deploy:  firebase deploy --only hosting
+  ─────────────────────────────────────────────────────
+-->
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cold Email</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .step-card { transition: opacity .3s, filter .3s; }
+    .step-card.locked { opacity: .4; pointer-events: none; filter: grayscale(1); }
+    .spinner { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .fade-in { animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .tab-btn.active { background:#1d4ed8; color:#fff; }
+    .tab-btn { transition: background .2s, color .2s; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+<!-- ── AUTH SCREEN ──────────────────────────────────────────────── -->
+<div id="auth-screen" class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-gray-900 border border-gray-800 rounded-2xl p-10 max-w-sm w-full text-center fade-in">
+    <div class="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4">AI</div>
+    <h1 class="text-2xl font-bold mb-1">Cold Email</h1>
+    <p class="text-gray-500 text-sm mb-8">LinkedIn &rarr; personalised cold email in 30 seconds</p>
+    <button id="signin-btn" onclick="signInWithGoogle()"
+      class="w-full flex items-center justify-center gap-3 bg-white text-gray-900 font-semibold px-5 py-3 rounded-xl hover:bg-gray-100 transition-colors">
+      <svg class="w-5 h-5" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      Continue with Google
+    </button>
+    <p id="auth-error" class="text-red-400 text-xs mt-3 hidden"></p>
+    <p class="text-gray-700 text-xs mt-6">Sign-in grants permission to send emails from your Gmail.</p>
+  </div>
+</div>
+
+<!-- ── MAIN APP ─────────────────────────────────────────────────── -->
+<div id="app-screen" class="hidden min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 px-5 py-3 flex items-center justify-between sticky top-0 bg-gray-950 z-10">
+    <div class="flex items-center gap-2">
+      <div class="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">AI</div>
+      <span class="font-semibold">Cold Email</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <img id="user-avatar" src="" class="w-7 h-7 rounded-full hidden border border-gray-700" />
+      <span id="user-name" class="text-sm text-gray-400 hidden sm:inline"></span>
+      <button onclick="doSignOut()" class="text-xs text-gray-500 hover:text-gray-300 px-2 py-1 rounded border border-gray-800 hover:border-gray-600 transition-colors">Sign out</button>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <nav class="flex gap-1 px-5 pt-4 border-b border-gray-800">
+    <button onclick="switchTab('compose')" id="tab-btn-compose" class="tab-btn active text-sm font-medium px-4 py-2 rounded-t-lg">Compose</button>
+    <button onclick="switchTab('history')" id="tab-btn-history" class="tab-btn text-sm font-medium px-4 py-2 rounded-t-lg text-gray-400 hover:text-white">History</button>
+    <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn text-sm font-medium px-4 py-2 rounded-t-lg text-gray-400 hover:text-white">Settings</button>
+  </nav>
+
+  <main class="flex-1 overflow-y-auto">
+
+    <!-- ── COMPOSE ───────────────────────────────────────────────── -->
+    <div id="tab-compose" class="max-w-2xl mx-auto px-4 py-6 space-y-5">
+
+      <div id="setup-banner" class="hidden bg-yellow-950 border border-yellow-700 rounded-xl p-4 text-sm fade-in">
+        <p class="font-semibold text-yellow-400 mb-1">Setup required</p>
+        <p class="text-gray-400">Your server needs <strong class="text-yellow-300">GMAIL_USER</strong> and <strong class="text-yellow-300">GMAIL_APP_PASSWORD</strong> set in <code class="bg-gray-800 px-1 rounded text-gray-300">.env</code> to send emails.</p>
+      </div>
+
+      <div id="no-resume-banner" class="hidden bg-orange-950 border border-orange-700 rounded-xl p-4 text-sm fade-in">
+        <p class="font-semibold text-orange-400 mb-1">Resume not uploaded</p>
+        <p class="text-gray-400">Go to <button onclick="switchTab('settings')" class="text-blue-400 underline">Settings</button> and upload your Resume PDF before composing.</p>
+      </div>
+
+      <!-- Step 1: Paste Job Post -->
+      <div id="step-job" class="step-card bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold">1</span>
+            <h2 class="font-semibold">Paste Job Post</h2>
+          </div>
+          <button onclick="resetCompose()" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">↺ Reset</button>
+        </div>
+        <textarea id="job-text" rows="8"
+          placeholder="Paste the full LinkedIn job description here..."
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors resize-y"></textarea>
+        <div class="flex items-center justify-between mt-2 mb-4">
+          <span id="job-char-count" class="text-xs text-gray-600">0 characters</span>
+          <span class="text-xs text-gray-600">Application details pre-filled from Settings</span>
+        </div>
+        <div class="grid grid-cols-2 gap-3 p-3 bg-gray-800/40 rounded-lg mb-4">
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Notice Period</label>
+            <input type="text" id="c-notice" placeholder="e.g. 30 days / Immediate"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Current CTC</label>
+            <input type="text" id="c-current-ctc" placeholder="e.g. 12 LPA"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Expected CTC</label>
+            <input type="text" id="c-expected-ctc" placeholder="e.g. 18 LPA"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Last Working Day</label>
+            <input type="text" id="c-lwd" placeholder="e.g. July 31, 2026"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+        </div>
+        <button id="generate-btn" onclick="generateEmailFromPost()"
+          class="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Generate Email
+        </button>
+      </div>
+
+      <!-- Step 2: Email Draft -->
+      <div id="step-email" class="step-card bg-gray-900 border border-gray-800 rounded-xl p-5 locked hidden fade-in">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold">2</span>
+          <h2 class="font-semibold">Email Draft</h2>
+          <span class="text-xs text-gray-500">&mdash; edit if needed</span>
+        </div>
+        <div id="job-summary" class="flex flex-wrap items-center gap-x-2 gap-y-1 bg-gray-800 rounded-lg px-4 py-2.5 mb-4 text-xs text-gray-400">
+          <span id="d-job-title" class="font-medium text-white"></span>
+          <span class="text-gray-600">@</span>
+          <span id="d-company-name" class="font-medium text-blue-400"></span>
+          <span id="d-recruiter-name" class="text-gray-500"></span>
+        </div>
+        <div class="space-y-3">
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">To (HR / Recruiter Email) <span class="text-red-400">*</span></label>
+            <input type="email" id="send-to" placeholder="hr@company.com"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Subject <span class="text-red-400">*</span></label>
+            <input type="text" id="email-subject"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Body <span class="text-red-400">*</span></label>
+            <textarea id="email-body" rows="10"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 focus:outline-none focus:border-blue-500 transition-colors resize-y"></textarea>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-xs text-gray-500 flex items-center gap-1">
+              <svg class="w-3.5 h-3.5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+              Resume attaches automatically
+            </span>
+            <button id="send-btn" onclick="sendEmail()"
+              class="bg-green-600 hover:bg-green-500 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+              Send Email
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── HISTORY ────────────────────────────────────────────────── -->
+    <div id="tab-history" class="hidden max-w-3xl mx-auto px-4 py-6">
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+          <div id="stat-total" class="text-3xl font-bold text-blue-400">--</div>
+          <div class="text-xs text-gray-500 mt-1">Total Sent</div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+          <div id="stat-week" class="text-3xl font-bold text-purple-400">--</div>
+          <div class="text-xs text-gray-500 mt-1">This Week</div>
+        </div>
+        <div class="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
+          <div id="stat-today" class="text-3xl font-bold text-green-400">--</div>
+          <div class="text-xs text-gray-500 mt-1">Today</div>
+        </div>
+      </div>
+      <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-800 flex items-center justify-between">
+          <h2 class="font-semibold text-sm">Sent Emails</h2>
+          <button onclick="loadHistory()" class="text-xs text-blue-400 hover:text-blue-300">Refresh</button>
+        </div>
+        <div id="history-loading" class="p-8 text-center text-gray-500 text-sm">Loading...</div>
+        <div id="history-empty" class="hidden p-8 text-center text-gray-500 text-sm">No emails sent yet. Compose your first one!</div>
+        <div class="overflow-x-auto">
+          <table id="history-table" class="hidden w-full text-sm">
+            <thead><tr class="text-xs text-gray-500 border-b border-gray-800">
+              <th class="text-left px-5 py-3 font-medium">Date</th>
+              <th class="text-left px-5 py-3 font-medium">Company</th>
+              <th class="text-left px-5 py-3 font-medium">Sent To</th>
+              <th class="text-left px-5 py-3 font-medium hidden md:table-cell">Subject</th>
+              <th class="text-left px-5 py-3 font-medium">Status</th>
+            </tr></thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SETTINGS ───────────────────────────────────────────────── -->
+    <div id="tab-settings" class="hidden max-w-xl mx-auto px-4 py-6 space-y-5">
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h2 class="font-semibold mb-1">API Credentials</h2>
+        <p class="text-xs text-gray-500 mb-4">Saved to your account. Required for AI generation and email sending.</p>
+        <div class="flex gap-5 mb-4">
+          <div class="flex items-center gap-2 text-sm">
+            <span id="groq-dot" class="w-2 h-2 rounded-full bg-gray-600"></span>
+            <span id="groq-label" class="text-gray-400">Groq</span>
+          </div>
+          <div class="flex items-center gap-2 text-sm">
+            <span id="gmail-dot" class="w-2 h-2 rounded-full bg-gray-600"></span>
+            <span id="gmail-label" class="text-gray-400">Gmail</span>
+          </div>
+        </div>
+        <div class="space-y-3">
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Groq API Key &mdash; <a href="https://console.groq.com/keys" target="_blank" class="text-blue-500 hover:underline">get a free key ↗</a></label>
+            <div class="relative">
+              <input type="password" id="s-groq-key" placeholder="gsk_..."
+                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors pr-14" />
+              <button type="button" onclick="togglePwd('s-groq-key',this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300">show</button>
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Gmail Address</label>
+            <input type="email" id="s-gmail-user" placeholder="you@gmail.com"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Gmail App Password &mdash; <a href="https://myaccount.google.com/apppasswords" target="_blank" class="text-blue-500 hover:underline">generate one ↗</a></label>
+            <div class="relative">
+              <input type="password" id="s-gmail-pass" placeholder="16-character app password"
+                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors pr-14" />
+              <button type="button" onclick="togglePwd('s-gmail-pass',this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-300">show</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h2 class="font-semibold mb-3">Your Details</h2>
+        <div class="space-y-3">
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Your Name (shown as email sender)</label>
+            <input type="text" id="s-name" placeholder="Your Full Name"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Contact Number</label>
+            <input type="tel" id="s-phone" placeholder="e.g. +91 98765 43210"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div>
+            <label class="text-xs text-gray-500 block mb-1">Resume filename in attachment</label>
+            <input type="text" id="s-resume-name" placeholder="YourName_Resume.pdf"
+              class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+          </div>
+          <div class="border-t border-gray-800 pt-3 mt-1">
+            <p class="text-xs text-gray-500 mb-3">Default application info (pre-fills Compose fields)</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-gray-500 block mb-1">Notice Period</label>
+                <input type="text" id="s-notice" placeholder="e.g. 30 days"
+                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-500 block mb-1">Current CTC</label>
+                <input type="text" id="s-current-ctc" placeholder="e.g. 12 LPA"
+                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-500 block mb-1">Expected CTC</label>
+                <input type="text" id="s-expected-ctc" placeholder="e.g. 18 LPA"
+                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-500 block mb-1">Last Working Day</label>
+                <input type="text" id="s-lwd" placeholder="e.g. July 31, 2026"
+                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+        <h2 class="font-semibold mb-3">Resume PDF</h2>
+        <div id="settings-resume-upload">
+          <label class="flex items-center gap-3 border border-dashed border-gray-700 rounded-lg px-4 py-3 cursor-pointer hover:border-blue-500 transition-colors">
+            <svg class="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <span class="text-sm text-gray-400">Upload Resume PDF</span>
+            <input type="file" id="settings-resume-input" accept=".pdf" class="hidden" />
+          </label>
+        </div>
+        <div id="settings-resume-loaded" class="hidden flex items-center justify-between bg-gray-800 rounded-lg px-4 py-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span class="text-sm text-gray-300">Resume saved in browser</span>
+          </div>
+          <button onclick="removeResume()" class="text-xs text-red-400 hover:text-red-300 ml-4">Replace</button>
+        </div>
+      </div>
+
+      <button onclick="saveSettings()" id="save-btn"
+        class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
+        Save Changes
+      </button>
+      <p id="save-msg" class="text-center text-sm hidden"></p>
+    </div>
+
+  </main>
+
+  <footer class="text-center text-xs text-gray-600 py-4 border-t border-gray-800">
+    Powered by Adarsh &copy; 2026 &mdash; All rights reserved.
+  </footer>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-5 right-5 hidden z-50 fade-in">
+  <div id="toast-inner" class="px-4 py-3 rounded-xl shadow-2xl text-sm font-medium max-w-xs"></div>
+</div>
+
+<script type="module">
+import { initializeApp }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc, deleteDoc, collection, addDoc, getDocs, query, orderBy, limit }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+// Resume stored in Firestore as base64 (free, max 1MB per doc)
+// ── Firestore resume helpers ──────────────────────────────────────────
+async function firestoreSaveResume(uid, arrayBuffer, filename, resumeText) {
+  const base64 = arrayBufferToBase64(arrayBuffer);
+  await setDoc(doc(db, 'users', uid, 'resume', 'data'), {
+    base64, filename,
+    size: arrayBuffer.byteLength,
+    resumeText: resumeText || '',
+    uploadedAt: new Date(),
+  });
+}
+async function firestoreGetResume(uid) {
+  const snap = await getDoc(doc(db, 'users', uid, 'resume', 'data'));
+  if (!snap.exists()) return null;
+  const { base64 } = snap.data();
+  // decode base64 → ArrayBuffer
+  const binary = atob(base64);
+  const buf = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+  return buf.buffer;
+}
+async function firestoreDeleteResume(uid) {
+  await deleteDoc(doc(db, 'users', uid, 'resume', 'data'));
+}
+async function firestoreGetResumeRaw(uid) {
+  const snap = await getDoc(doc(db, 'users', uid, 'resume', 'data'));
+  return snap.exists() ? snap.data() : null; // returns { base64, filename, size, uploadedAt }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// FIREBASE CONFIG
+// ─────────────────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "AIzaSyCotlZ6MZfcrVEyYM5trqi50s9OWBPBJDI",
+  authDomain:        "coldemailbyadarsh.firebaseapp.com",
+  projectId:         "coldemailbyadarsh",
+  storageBucket:     "coldemailbyadarsh.firebasestorage.app",
+  messagingSenderId: "308718359665",
+  appId:             "1:308718359665:web:290958bfc56130baa1f7d0",
+};
+// ─────────────────────────────────────────────────────────────────────
+
+const fbApp = initializeApp(firebaseConfig);
+const auth  = getAuth(fbApp);
+const db    = getFirestore(fbApp);
+
+const provider = new GoogleAuthProvider();
+
+// ── State ─────────────────────────────────────────────────────────────
+let currentUser      = null;
+let jobDetails       = null;
+let cachedResumeText = null;
+
+// ── Auth ──────────────────────────────────────────────────────────────
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    currentUser = user;
+    hide('auth-screen'); show('app-screen');
+    const av = document.getElementById('user-avatar');
+    if (user.photoURL) { av.src = user.photoURL; av.classList.remove('hidden'); }
+    const nm = document.getElementById('user-name');
+    nm.textContent = user.displayName || user.email;
+    nm.classList.remove('hidden');
+    await initApp();
+  } else {
+    currentUser = null;
+    show('auth-screen'); hide('app-screen');
+  }
+});
+
+window.signInWithGoogle = async () => {
+  const errEl = document.getElementById('auth-error');
+  errEl.classList.add('hidden');
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  }
+};
+
+window.doSignOut = () => fbSignOut(auth);
+
+// ── App Init ──────────────────────────────────────────────────────────
+async function initApp() {
+  document.getElementById('settings-resume-input').addEventListener('change',
+    e => uploadResume(e.target.files[0]));
+  document.getElementById('job-text').addEventListener('input', () => {
+    document.getElementById('job-char-count').textContent =
+      document.getElementById('job-text').value.length + ' characters';
+  });
+  await checkResumeExists();
+  await loadSettingsData();  // also pre-fills Compose fields from saved defaults
+  await checkSetupBanner();
+}
+
+// ── Settings ──────────────────────────────────────────────────────────
+async function getSettings() {
+  const snap = await getDoc(doc(db, 'users', currentUser.uid, 'settings', 'config'));
+  return snap.exists() ? snap.data() : {};
+}
+
+async function loadSettingsData() {
+  const s = await getSettings();
+  document.getElementById('s-name').value        = s.senderName  || '';
+  document.getElementById('s-phone').value         = s.phone       || '';
+  document.getElementById('s-resume-name').value  = s.resumeName  || '';
+  document.getElementById('s-groq-key').value     = s.groqApiKey  || '';
+  document.getElementById('s-gmail-user').value   = s.gmailUser   || '';
+  document.getElementById('s-gmail-pass').value   = s.gmailPass   || '';
+  document.getElementById('s-notice').value        = s.notice       || '';
+  document.getElementById('s-current-ctc').value   = s['current-ctc']  || '';
+  document.getElementById('s-expected-ctc').value  = s['expected-ctc'] || '';
+  document.getElementById('s-lwd').value           = s.lwd          || '';
+  // Also pre-fill Compose fields with saved defaults
+  const composeMap = { 'c-notice': 'notice', 'c-current-ctc': 'current-ctc', 'c-expected-ctc': 'expected-ctc', 'c-lwd': 'lwd' };
+  Object.entries(composeMap).forEach(([cId, sKey]) => {
+    const el = document.getElementById(cId);
+    if (el && s[sKey]) el.value = s[sKey];
+  });
+}
+
+window.togglePwd = function(id, btn) {
+  const el = document.getElementById(id);
+  const show = el.type === 'password';
+  el.type = show ? 'text' : 'password';
+  btn.textContent = show ? 'hide' : 'show';
+}
+
+window.saveSettings = async () => {
+  const btn = document.getElementById('save-btn');
+  setLoading(btn, 'Saving...');
+  const msg = document.getElementById('save-msg');
+  try {
+    await setDoc(doc(db, 'users', currentUser.uid, 'settings', 'config'), {
+      senderName:     document.getElementById('s-name').value.trim(),
+      phone:          document.getElementById('s-phone').value.trim(),
+      resumeName:     document.getElementById('s-resume-name').value.trim() || 'Resume.pdf',
+      groqApiKey:     document.getElementById('s-groq-key').value.trim(),
+      gmailUser:      document.getElementById('s-gmail-user').value.trim(),
+      gmailPass:      document.getElementById('s-gmail-pass').value.trim().replace(/\s/g, ''),
+      notice:         document.getElementById('s-notice').value.trim(),
+      'current-ctc':  document.getElementById('s-current-ctc').value.trim(),
+      'expected-ctc': document.getElementById('s-expected-ctc').value.trim(),
+      lwd:            document.getElementById('s-lwd').value.trim(),
+    }, { merge: true });
+    msg.textContent = '\u2713 Saved successfully';
+    msg.className = 'text-center text-sm text-green-400';
+    msg.classList.remove('hidden');
+    await loadSettingsData();   // reload fields from Firestore to confirm what was saved
+    await checkSetupBanner();
+    showToast('Settings saved', 'success');
+    setTimeout(() => msg.classList.add('hidden'), 3000);
+  } catch (err) {
+    msg.textContent = err.message;
+    msg.className = 'text-center text-sm text-red-400';
+    msg.classList.remove('hidden');
+  } finally { resetBtn(btn, 'Save Changes'); }
+};
+
+async function checkSetupBanner() {
+  const groqKey   = document.getElementById('s-groq-key')?.value.trim()   || '';
+  const gmailUser = document.getElementById('s-gmail-user')?.value.trim() || '';
+  const gmailPass = document.getElementById('s-gmail-pass')?.value.trim() || '';
+  const groqOk    = groqKey.length > 0;
+  const gmailOk   = gmailUser.length > 0 && gmailPass.length > 0;
+
+  const groqDot   = document.getElementById('groq-dot');
+  const gmailDot  = document.getElementById('gmail-dot');
+  const groqLabel = document.getElementById('groq-label');
+  const gmailLabel= document.getElementById('gmail-label');
+
+  if (groqDot) {
+    groqDot.className     = 'w-2 h-2 rounded-full ' + (groqOk ? 'bg-green-400' : 'bg-red-500');
+    groqLabel.textContent = groqOk ? 'Groq \u2014 configured' : 'Groq \u2014 API key missing';
+    groqLabel.className   = 'text-sm ' + (groqOk ? 'text-green-400' : 'text-red-400');
+  }
+  if (gmailDot) {
+    gmailDot.className    = 'w-2 h-2 rounded-full ' + (gmailOk ? 'bg-green-400' : 'bg-red-500');
+    gmailLabel.textContent= gmailOk ? 'Gmail \u2014 ' + gmailUser : 'Gmail \u2014 not configured';
+    gmailLabel.className  = 'text-sm ' + (gmailOk ? 'text-green-400' : 'text-red-400');
+  }
+  document.getElementById('setup-banner').classList.toggle('hidden', gmailOk);
+}
+
+// ── Resume ────────────────────────────────────────────────────────────
+async function checkResumeExists() {
+  const raw = await firestoreGetResumeRaw(currentUser.uid);
+  if (raw?.base64) {
+    showResumeLoaded(); unlockStep('step-job');
+    // Silently backfill resumeText if it was uploaded before this fix
+    if (!raw.resumeText) {
+      callBackend('POST', '/api/parse-resume', { base64: raw.base64 })
+        .then(parsed => {
+          if (parsed?.text) {
+            setDoc(doc(db, 'users', currentUser.uid, 'resume', 'data'),
+              { resumeText: parsed.text }, { merge: true });
+            cachedResumeText = parsed.text;
+          }
+        })
+        .catch(() => {});
+    }
+  } else {
+    show('no-resume-banner');
+    lockStep('step-job');
+  }
+}
+
+async function uploadResume(file) {
+  if (!file) return;
+
+  // ── Size check: Firestore doc limit is 1MB, base64 adds ~33% overhead
+  const MAX_BYTES = 750 * 1024; // 750 KB raw = ~1 MB after base64
+  if (file.size > MAX_BYTES) {
+    showToast('Resume must be under 750 KB. Compress your PDF and try again.', 'error');
+    return;
+  }
+
+  showFlex('resume-uploading'); hide('resume-upload-area'); hide('resume-loaded');
+  try {
+    const buf    = await file.arrayBuffer();
+    const base64 = arrayBufferToBase64(buf);
+
+    // Parse text on the backend (pdf-parse) — no CDN required
+    let resumeText = '';
+    try {
+      const parsed = await callBackend('POST', '/api/parse-resume', { base64 });
+      resumeText = parsed.text || '';
+    } catch { /* save without text; getResumeText() will re-parse on demand */ }
+
+    await firestoreSaveResume(currentUser.uid, buf, file.name, resumeText);
+    cachedResumeText = resumeText || null;
+    showResumeLoaded(); // hides no-resume-banner, unlocks step-job, updates Settings
+    showToast('Resume saved (' + (file.size / 1024).toFixed(0) + ' KB)', 'success');
+  } catch (err) {
+    show('settings-resume-upload');
+    showToast(err.message, 'error');
+  } finally { hide('resume-uploading'); }
+}
+
+window.removeResume = async () => {
+  try { await firestoreDeleteResume(currentUser.uid); } catch {}
+  cachedResumeText = null;
+  hide('settings-resume-loaded');
+  show('settings-resume-upload');
+  show('no-resume-banner');
+  lockStep('step-job'); lockStep('step-email');
+  hide('step-email');
+  showToast('Resume removed — upload a new one in Settings', 'info');
+};
+
+function showResumeLoaded() {
+  // Settings tab: show resume loaded state
+  hide('settings-resume-upload');
+  showFlex('settings-resume-loaded');
+  // Compose tab: hide the no-resume warning and unlock Step 1
+  hide('no-resume-banner');
+  unlockStep('step-job');
+}
+
+async function getResumeText() {
+  if (cachedResumeText) return cachedResumeText;
+  const raw = await firestoreGetResumeRaw(currentUser.uid);
+  if (!raw) throw new Error('Resume not found. Please upload it in Step 1.');
+  // Use pre-extracted text if available (stored at upload time)
+  if (raw.resumeText) {
+    cachedResumeText = raw.resumeText;
+    return cachedResumeText;
+  }
+  // Fallback: re-parse via backend (for resumes uploaded before this fix)
+  const parsed = await callBackend('POST', '/api/parse-resume', { base64: raw.base64 });
+  cachedResumeText = parsed.text;
+  // Save back to Firestore so this never has to re-parse again
+  setDoc(doc(db, 'users', currentUser.uid, 'resume', 'data'),
+    { resumeText: cachedResumeText }, { merge: true }).catch(() => {});
+  return cachedResumeText;
+}
+
+// ── Backend API helper ────────────────────────────────────────────────
+async function callBackend(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Server error');
+  return data;
+}
+
+// ── Generate (extract + write email in one click) ─────────────────────
+window.generateEmailFromPost = async () => {
+  const jobText = document.getElementById('job-text').value.trim();
+
+  // Validations
+  if (!jobText || jobText.length < 50)
+    return showToast('Paste a full job description (at least 50 characters)', 'error');
+
+  const raw = await firestoreGetResumeRaw(currentUser.uid);
+  if (!raw?.base64) {
+    show('no-resume-banner');
+    return showToast('Upload your resume in Settings first', 'error');
+  }
+
+  const btn = document.getElementById('generate-btn');
+  setLoading(btn, 'Extracting...');
+  try {
+    const groqApiKey = document.getElementById('s-groq-key').value.trim();
+    if (!groqApiKey) return showToast('Add your Groq API key in Settings first', 'error');
+
+    // 1 — extract job details
+    jobDetails = await callBackend('POST', '/api/extract', { jobText, groqApiKey });
+
+    // 2 — get resume text
+    setLoading(btn, 'Generating...');
+    const resumeText = await getResumeText();
+
+    // 3 — generate email
+    const appInfo = {
+      name:        document.getElementById('s-name').value.trim(),
+      phone:       document.getElementById('s-phone').value.trim(),
+      notice:      document.getElementById('c-notice').value.trim(),
+      currentCtc:  document.getElementById('c-current-ctc').value.trim(),
+      expectedCtc: document.getElementById('c-expected-ctc').value.trim(),
+      lwd:         document.getElementById('c-lwd').value.trim(),
+    };
+    const email = await callBackend('POST', '/api/generate', { jobDetails, resumeText, appInfo, groqApiKey });
+
+    // Populate draft
+    document.getElementById('email-subject').value = email.subject;
+    document.getElementById('email-body').value    = email.body;
+    if (jobDetails.hrEmail) document.getElementById('send-to').value = jobDetails.hrEmail;
+
+    // Job summary strip
+    document.getElementById('d-job-title').textContent     = jobDetails.jobTitle || '—';
+    document.getElementById('d-company-name').textContent   = jobDetails.company  || '';
+    document.getElementById('d-recruiter-name').textContent =
+      jobDetails.recruiterName ? '· ' + jobDetails.recruiterName : '';
+
+    // Reset Send button (in case previously used)
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.disabled  = false;
+    sendBtn.className = 'bg-green-600 hover:bg-green-500 text-white text-sm font-medium px-6 py-2.5 rounded-lg transition-colors flex items-center gap-2';
+    sendBtn.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>Send Email';
+
+    show('step-email'); unlockStep('step-email');
+    document.getElementById('step-email').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    showToast('Email ready — review and send', 'success');
+  } catch (err) { showToast(err.message, 'error'); }
+  finally {
+    resetBtn(btn, '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>Generate Email');
+  }
+};
+
+window.resetCompose = () => {
+  document.getElementById('job-text').value      = '';
+  document.getElementById('job-char-count').textContent = '0 characters';
+  document.getElementById('send-to').value       = '';
+  document.getElementById('email-subject').value  = '';
+  document.getElementById('email-body').value    = '';
+  jobDetails = null;
+  hide('step-email'); lockStep('step-email');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+// ── Send via backend (Nodemailer) ─────────────────────────────────────
+window.sendEmail = async () => {
+  const to      = document.getElementById('send-to').value.trim();
+  const subject = document.getElementById('email-subject').value.trim();
+  const body    = document.getElementById('email-body').value.trim();
+
+  // ── Validations
+  if (!to)      return showToast('Enter the recipient\'s email address', 'error');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return showToast('Enter a valid email address', 'error');
+  if (!subject) return showToast('Subject cannot be empty', 'error');
+  if (!body)    return showToast('Email body cannot be empty', 'error');
+  if (body.length < 20) return showToast('Email body seems too short', 'error');
+
+  const btn = document.getElementById('send-btn');
+  setLoading(btn, 'Sending...');
+  try {
+    const s = await getSettings();
+    const gmailUser = document.getElementById('s-gmail-user').value.trim() || s.gmailUser || '';
+    const gmailPass = document.getElementById('s-gmail-pass').value.trim().replace(/\s/g,'') || s.gmailPass || '';
+    if (!gmailUser || !gmailPass) {
+      resetBtn(btn, '&#128232; Send Email');
+      return showToast('Add your Gmail address and App Password in Settings first', 'error');
+    }
+    // Get resume base64 directly from Firestore for the attachment
+    let resumeBase64 = null;
+    try {
+      const raw = await firestoreGetResumeRaw(currentUser.uid);
+      if (raw?.base64) resumeBase64 = raw.base64;
+    } catch { /* send without attachment if missing */ }
+
+    await callBackend('POST', '/api/send', {
+      to, subject, body,
+      gmailUser,
+      gmailAppPassword: gmailPass,
+      senderName: s.senderName || 'Applicant',
+      resumeBase64,
+      resumeName: s.resumeName || 'Resume.pdf',
+    });
+
+    // Save to Firestore history
+    await addDoc(collection(db, 'users', currentUser.uid, 'history'), {
+      to, subject,
+      jobTitle: jobDetails?.jobTitle || null,
+      company:  jobDetails?.company  || null,
+      sentAt:   new Date(),
+      status:   'sent',
+    });
+
+    showToast('Email sent to ' + to + '!', 'success');
+    setTimeout(() => resetCompose(), 1500);
+  } catch (err) {
+    try {
+      await addDoc(collection(db, 'users', currentUser.uid, 'history'), {
+        to, subject, jobTitle: jobDetails?.jobTitle||null, company: jobDetails?.company||null,
+        sentAt: new Date(), status: 'failed', error: err.message,
+      });
+    } catch {}
+    showToast(err.message, 'error');
+  } finally {
+    resetBtn(btn, '&#128232; Send Email');
+  }
+};
+
+function arrayBufferToBase64(buf) {
+  let s = '';
+  new Uint8Array(buf).forEach(b => s += String.fromCharCode(b));
+  return btoa(s);
+}
+
+// ── History ───────────────────────────────────────────────────────────
+window.loadHistory = async () => {
+  show('history-loading'); hide('history-table'); hide('history-empty');
+  try {
+    const snap    = await getDocs(query(
+      collection(db, 'users', currentUser.uid, 'history'),
+      orderBy('sentAt', 'desc'), limit(50)
+    ));
+    const history = snap.docs.map(d => ({ id: d.id, ...d.data(), sentAt: d.data().sentAt?.toDate() }));
+    hide('history-loading');
+
+    if (!history.length) { show('history-empty'); setStats(0,0,0); return; }
+
+    const now     = new Date();
+    const weekAgo = new Date(now - 7*24*60*60*1000);
+    const today   = now.toDateString();
+    const sent    = history.filter(h => h.status === 'sent');
+    setStats(
+      sent.length,
+      sent.filter(h => new Date(h.sentAt) > weekAgo).length,
+      sent.filter(h => new Date(h.sentAt).toDateString() === today).length,
+    );
+
+    document.getElementById('history-body').innerHTML = history.map(h => {
+      const date  = new Date(h.sentAt).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      const badge = h.status==='sent'
+        ? '<span class="px-2 py-0.5 rounded text-xs font-medium text-green-400 bg-green-900/30">sent</span>'
+        : '<span class="px-2 py-0.5 rounded text-xs font-medium text-red-400 bg-red-900/30">failed</span>';
+      return '<tr class="border-t border-gray-800 hover:bg-gray-800/40 transition-colors">'
+        + '<td class="px-5 py-3 text-gray-400 text-xs whitespace-nowrap">' + date + '</td>'
+        + '<td class="px-5 py-3 font-medium text-sm">' + (h.company||'—') + '</td>'
+        + '<td class="px-5 py-3 text-gray-300 text-sm">' + h.to + '</td>'
+        + '<td class="px-5 py-3 text-gray-500 text-xs hidden md:table-cell max-w-xs truncate">' + (h.subject||'—') + '</td>'
+        + '<td class="px-5 py-3">' + badge + '</td>'
+        + '</tr>';
+    }).join('');
+    show('history-table');
+  } catch (err) {
+    document.getElementById('history-loading').textContent = 'Failed: ' + err.message;
+  }
+};
+
+function setStats(total, week, today) {
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-week').textContent  = week;
+  document.getElementById('stat-today').textContent = today;
+}
+
+// ── Tab Switching ─────────────────────────────────────────────────────
+window.switchTab = (tab) => {
+  ['compose','history','settings'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('hidden', t !== tab);
+    const btn = document.getElementById('tab-btn-' + t);
+    btn.classList.toggle('active', t === tab);
+    btn.classList.toggle('text-gray-400', t !== tab);
+    btn.classList.toggle('hover:text-white', t !== tab);
+  });
+  if (tab === 'history')  loadHistory();
+  if (tab === 'settings') loadSettingsData();
+};
+
+// ── UI Helpers ────────────────────────────────────────────────────────
+function show(id)     { document.getElementById(id).classList.remove('hidden'); }
+function hide(id)     { document.getElementById(id).classList.add('hidden'); }
+function showFlex(id) { const el=document.getElementById(id); el.classList.remove('hidden'); el.classList.add('flex'); }
+function unlockStep(id) { document.getElementById(id).classList.remove('locked'); }
+function lockStep(id)   { document.getElementById(id).classList.add('locked'); }
+
+function setLoading(btn, text) {
+  btn.disabled = true;
+  btn.innerHTML = '<svg class="spinner w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg> ' + text;
+}
+function resetBtn(btn, html) { btn.disabled = false; btn.innerHTML = html; }
+
+let toastTimer;
+window.showToast = function(msg, type) {
+  type = type || 'info';
+  const colors = {
+    success: 'bg-green-900 border border-green-700 text-green-200',
+    error:   'bg-red-900 border border-red-700 text-red-200',
+    info:    'bg-gray-800 border border-gray-700 text-gray-200',
+  };
+  const inner = document.getElementById('toast-inner');
+  inner.className = 'px-4 py-3 rounded-xl shadow-2xl text-sm font-medium ' + (colors[type]||colors.info);
+  inner.textContent = msg;
+  document.getElementById('toast').classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => document.getElementById('toast').classList.add('hidden'), 4000);
+};
+</script>
+</body>
+</html>
