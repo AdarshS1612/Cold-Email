@@ -11,6 +11,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Cold Email" />
+  <link rel="manifest" href="/manifest.json" />
   <title>Cold Email</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -76,14 +82,24 @@
     <!-- ── COMPOSE ───────────────────────────────────────────────── -->
     <div id="tab-compose" class="max-w-2xl mx-auto px-4 py-6 space-y-5">
 
-      <div id="setup-banner" class="hidden bg-yellow-950 border border-yellow-700 rounded-xl p-4 text-sm fade-in">
-        <p class="font-semibold text-yellow-400 mb-1">Setup required</p>
-        <p class="text-gray-400">Your server needs <strong class="text-yellow-300">GMAIL_USER</strong> and <strong class="text-yellow-300">GMAIL_APP_PASSWORD</strong> set in <code class="bg-gray-800 px-1 rounded text-gray-300">.env</code> to send emails.</p>
+      <div id="setup-banner" class="hidden bg-gray-800 border border-blue-700 rounded-xl p-4 text-sm fade-in">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <div>
+            <p class="font-semibold text-white mb-0.5">Complete your setup</p>
+            <p class="text-gray-400">Add your Gmail address and App Password in <button onclick="switchTab('settings')" class="text-blue-400 hover:underline">Settings</button> to start sending emails.</p>
+          </div>
+        </div>
       </div>
 
-      <div id="no-resume-banner" class="hidden bg-orange-950 border border-orange-700 rounded-xl p-4 text-sm fade-in">
-        <p class="font-semibold text-orange-400 mb-1">Resume not uploaded</p>
-        <p class="text-gray-400">Go to <button onclick="switchTab('settings')" class="text-blue-400 underline">Settings</button> and upload your Resume PDF before composing.</p>
+      <div id="no-resume-banner" class="hidden bg-gray-800 border border-orange-700 rounded-xl p-4 text-sm fade-in">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <div>
+            <p class="font-semibold text-white mb-0.5">Resume not uploaded</p>
+            <p class="text-gray-400">Upload your resume PDF in <button onclick="switchTab('settings')" class="text-blue-400 hover:underline">Settings</button> — it will be attached to every email you send.</p>
+          </div>
+        </div>
       </div>
 
       <!-- Step 1: Paste Job Post -->
@@ -95,12 +111,31 @@
           </div>
           <button onclick="resetCompose()" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">↺ Reset</button>
         </div>
-        <textarea id="job-text" rows="8"
+
+        <!-- LinkedIn URL fetch (mobile-friendly) -->
+        <div class="flex gap-2 mb-3">
+          <input type="url" id="job-url" placeholder="Paste LinkedIn job URL (easier on mobile)"
+            class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors min-w-0" />
+          <button id="fetch-btn" onclick="fetchJobFromUrl()"
+            class="flex-shrink-0 bg-blue-700 hover:bg-blue-600 text-white text-xs font-semibold px-4 py-2.5 rounded-lg transition-colors whitespace-nowrap">
+            Fetch
+          </button>
+        </div>
+        <div class="flex items-center gap-3 mb-3">
+          <div class="flex-1 h-px bg-gray-700"></div>
+          <span class="text-xs text-gray-600">or type / paste below</span>
+          <div class="flex-1 h-px bg-gray-700"></div>
+        </div>
+
+        <textarea id="job-text" rows="6"
           placeholder="Paste the full LinkedIn job description here..."
           class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors resize-y"></textarea>
         <div class="flex items-center justify-between mt-2 mb-4">
           <span id="job-char-count" class="text-xs text-gray-600">0 characters</span>
-          <span class="text-xs text-gray-600">Application details pre-filled from Settings</span>
+          <button onclick="pasteFromClipboard()" class="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            Paste from clipboard
+          </button>
         </div>
         <div class="grid grid-cols-2 gap-3 p-3 bg-gray-800/40 rounded-lg mb-4">
           <div>
@@ -698,7 +733,44 @@ window.generateEmailFromPost = async () => {
   }
 };
 
+window.fetchJobFromUrl = async () => {
+  const url = document.getElementById('job-url').value.trim();
+  if (!url) return showToast('Paste a LinkedIn job URL first', 'error');
+  if (!url.includes('linkedin.com'))
+    return showToast('Only LinkedIn URLs are supported', 'error');
+
+  const btn = document.getElementById('fetch-btn');
+  setLoading(btn, 'Fetching...');
+  try {
+    const data = await callBackend('POST', '/api/fetch-job', { url });
+    const ta = document.getElementById('job-text');
+    ta.value = data.text;
+    document.getElementById('job-char-count').textContent = data.text.length + ' characters';
+    ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    showToast('Job description fetched — review and generate', 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    resetBtn(btn, 'Fetch');
+  }
+};
+
+window.pasteFromClipboard = async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) return showToast('Clipboard is empty', 'info');
+    const ta = document.getElementById('job-text');
+    ta.value = text;
+    document.getElementById('job-char-count').textContent = text.length + ' characters';
+    ta.focus();
+    showToast('Pasted from clipboard', 'success');
+  } catch {
+    showToast('Tap inside the text box and paste manually (Ctrl+V / long-press)', 'info');
+  }
+};
+
 window.resetCompose = () => {
+  document.getElementById('job-url').value       = '';
   document.getElementById('job-text').value      = '';
   document.getElementById('job-char-count').textContent = '0 characters';
   document.getElementById('send-to').value       = '';

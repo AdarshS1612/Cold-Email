@@ -59,6 +59,73 @@ router.post('/send', async (req, res) => {
   }
 });
 
+// POST /api/fetch-job — fetches a LinkedIn job page and returns plain text
+router.post('/fetch-job', async (req, res) => {
+  const { url } = req.body;
+  if (!url || !url.includes('linkedin.com'))
+    return res.status(400).json({ error: 'A valid LinkedIn URL is required.' });
+
+  try {
+    const https   = require('https');
+    const http    = require('http');
+    const { URL } = require('url');
+
+    const fetchUrl = (targetUrl, redirects = 0) => new Promise((resolve, reject) => {
+      if (redirects > 5) return reject(new Error('Too many redirects'));
+      const parsed  = new URL(targetUrl);
+      const client  = parsed.protocol === 'https:' ? https : http;
+      const options = {
+        hostname: parsed.hostname,
+        path:     parsed.pathname + parsed.search,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+          'Accept':          'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'identity',
+        }
+      };
+      client.get(options, r => {
+        if (r.statusCode >= 300 && r.statusCode < 400 && r.headers.location)
+          return resolve(fetchUrl(r.headers.location, redirects + 1));
+        let data = '';
+        r.on('data', c => data += c);
+        r.on('end', () => resolve(data));
+      }).on('error', reject);
+    });
+
+    const html = await fetchUrl(url);
+
+    // Try JSON-LD structured data first (most reliable)
+    const ldMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/i);
+    if (ldMatch) {
+      try {
+        const ld = JSON.parse(ldMatch[1]);
+        const desc = ld.description || ld.responsibilities || '';
+        if (desc.length > 100) {
+          const clean = desc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          const title = ld.title ? `${ld.title} at ${ld.hiringOrganization?.name || ''}\n\n` : '';
+          return res.json({ text: (title + clean).substring(0, 6000) });
+        }
+      } catch {}
+    }
+
+    // Fallback: strip all HTML tags
+    const text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (text.length < 100)
+      return res.status(422).json({ error: 'LinkedIn blocked this request. Please copy the job description text manually and paste it below.' });
+
+    res.json({ text: text.substring(0, 6000) });
+  } catch (err) {
+    res.status(500).json({ error: 'Could not fetch the job post. Copy the text manually and paste it below.' });
+  }
+});
+
 // POST /api/parse-resume — accepts base64 PDF, returns plain text
 router.post('/parse-resume', async (req, res) => {
   const { base64 } = req.body;
