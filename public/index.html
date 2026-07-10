@@ -799,12 +799,17 @@ window.sendEmail = async () => {
   const btn = document.getElementById('send-btn');
   setLoading(btn, 'Sending...');
   try {
-    const s = await getSettings();
-    const gmailUser = document.getElementById('s-gmail-user').value.trim() || s.gmailUser || '';
-    const gmailPass = document.getElementById('s-gmail-pass').value.trim().replace(/\s/g,'') || s.gmailPass || '';
+    // Read credentials — Firestore first, DOM fields as fallback
+    let s = {};
+    try { s = await getSettings(); } catch { /* use DOM field values only */ }
+
+    const gmailUser = (s.gmailUser || document.getElementById('s-gmail-user').value || '').trim();
+    const gmailPass = (s.gmailPass || document.getElementById('s-gmail-pass').value || '').trim().replace(/\s/g, '');
+    const groqKey   = (s.groqApiKey || document.getElementById('s-groq-key').value   || '').trim();
+
     if (!gmailUser || !gmailPass) {
       resetBtn(btn, '&#128232; Send Email');
-      return showToast('Add your Gmail address and App Password in Settings first', 'error');
+      return showToast('Add your Gmail address and App Password in Settings, then Save Changes', 'error');
     }
     // Get resume base64 directly from Firestore for the attachment
     let resumeBase64 = null;
@@ -817,7 +822,7 @@ window.sendEmail = async () => {
       to, subject, body,
       gmailUser,
       gmailAppPassword: gmailPass,
-      senderName: s.senderName || 'Applicant',
+      senderName: s.senderName || document.getElementById('s-name').value.trim() || 'Applicant',
       resumeBase64,
       resumeName: s.resumeName || 'Resume.pdf',
     });
