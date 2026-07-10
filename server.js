@@ -18,7 +18,6 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n Cold Email \u2192 http://localhost:${PORT}\n`);
-  console.log(` Firebase : ${process.env.FIREBASE_PROJECT_ID || 'not set'}`);
-  console.log(` Mode     : All credentials managed per-user via Settings\n`);
+  console.log(`\n Cold Email \u2192 http://localhost:${PORT}`);
+  console.log(` Mode : All credentials managed per-user via Settings\n`);
 });

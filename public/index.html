@@ -590,14 +590,16 @@ async function checkResumeExists() {
 async function uploadResume(file) {
   if (!file) return;
 
-  // ── Size check: Firestore doc limit is 1MB, base64 adds ~33% overhead
-  const MAX_BYTES = 750 * 1024; // 750 KB raw = ~1 MB after base64
+  const MAX_BYTES = 750 * 1024;
   if (file.size > MAX_BYTES) {
     showToast('Resume must be under 750 KB. Compress your PDF and try again.', 'error');
     return;
   }
 
-  showFlex('resume-uploading'); hide('resume-upload-area'); hide('resume-loaded');
+  const uploadArea = document.getElementById('settings-resume-upload');
+  const label = uploadArea?.querySelector('span');
+  if (label) label.textContent = 'Uploading…';
+
   try {
     const buf    = await file.arrayBuffer();
     const base64 = arrayBufferToBase64(buf);
@@ -611,12 +613,12 @@ async function uploadResume(file) {
 
     await firestoreSaveResume(currentUser.uid, buf, file.name, resumeText);
     cachedResumeText = resumeText || null;
-    showResumeLoaded(); // hides no-resume-banner, unlocks step-job, updates Settings
+    showResumeLoaded();
     showToast('Resume saved (' + (file.size / 1024).toFixed(0) + ' KB)', 'success');
   } catch (err) {
-    show('settings-resume-upload');
+    if (label) label.textContent = 'Upload Resume PDF';
     showToast(err.message, 'error');
-  } finally { hide('resume-uploading'); }
+  }
 }
 
 window.removeResume = async () => {
